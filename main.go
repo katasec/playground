@@ -9,6 +9,5 @@ var (
 )
 
 func main() {
-
 	pulumi.Run(Start)
 }

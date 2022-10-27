@@ -17,10 +17,12 @@ func Start(ctx *pulumi.Context) error {
 	utils.ExitOnError(err)
 
 	// Create VNET
+	vnetTemplate := lookup.NewVnetTemplate()
+
 	vnet, err := network.NewVirtualNetwork(ctx, "virtualNetwork", &network.VirtualNetworkArgs{
 		AddressSpace: &network.AddressSpaceArgs{
 			AddressPrefixes: pulumi.StringArray{
-				pulumi.String("172.17.0.0/16"),
+				pulumi.String(vnetTemplate.AddressPrefix),
 			},
 		},
 		ResourceGroupName:  resourceGroup.Name,
@@ -29,7 +31,7 @@ func Start(ctx *pulumi.Context) error {
 	utils.ExitOnError(err)
 
 	// Create Subnets
-	for _, subnet := range lookup.SpokeSubnets {
+	for _, subnet := range vnetTemplate.Subnets {
 		_, err = network.NewSubnet(ctx, subnet.Name, &network.SubnetArgs{
 			ResourceGroupName:  resourceGroup.Name,
 			AddressPrefix:      pulumi.String(subnet.AddressPrefix),
