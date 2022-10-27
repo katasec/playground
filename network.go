@@ -7,36 +7,6 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-type SubnetInfo struct {
-	Name            string
-	AddressPrefixes []string
-	Description     string
-}
-
-func GetSubnets() *[]SubnetInfo {
-	return &[]SubnetInfo{
-		{
-			Name:            "snet-tier1-agw",
-			Description:     "Subnet for AGW",
-			AddressPrefixes: []string{"172.17.1.0/24"},
-		},
-		{
-			Name:            "snet-tier1-webin",
-			Description:     "Subnet for other LBs",
-			AddressPrefixes: []string{"172.17.1.0/24"},
-		},
-		{
-			Name:            "snet-tier1-rsvd1",
-			Description:     "Tier 1 reserved subnet",
-			AddressPrefixes: []string{"172.17.1.0/24"},
-		},
-		{
-			Name:            "snet-tier1-rsvd1",
-			Description:     "Tier 1 reserved subnet",
-			AddressPrefixes: []string{"172.17.1.0/24"},
-		},
-	}
-}
 func Start(ctx *pulumi.Context) error {
 
 	// Create Resource Group
@@ -45,15 +15,23 @@ func Start(ctx *pulumi.Context) error {
 	})
 	utils.ExitOnError(err)
 
+	// Create VNET
 	_, err = network.NewVirtualNetwork(ctx, "virtualNetwork", &network.VirtualNetworkArgs{
 		AddressSpace: &network.AddressSpaceArgs{
 			AddressPrefixes: pulumi.StringArray{
-				pulumi.String("10.0.0.0/16"),
+				pulumi.String("172.17.0.0/16"),
+			},
+		},
+		Subnets: []network.SubnetTypeArgs{
+			&network.SubnetTypeArgs{
+				AddressPrefix: pulumi.String("10.0.0.0/24"),
+				Name:          pulumi.String("test-1"),
 			},
 		},
 		ResourceGroupName:  resourceGroup.Name,
 		VirtualNetworkName: pulumi.String("test-vnet"),
 	})
+	utils.ExitOnError(err)
 
 	return err
 }
