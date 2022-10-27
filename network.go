@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/katasec/playground/lookup"
 	"github.com/katasec/playground/utils"
 	network "github.com/pulumi/pulumi-azure-native/sdk/go/azure/network"
 	"github.com/pulumi/pulumi-azure-native/sdk/go/azure/resources"
@@ -16,22 +17,26 @@ func Start(ctx *pulumi.Context) error {
 	utils.ExitOnError(err)
 
 	// Create VNET
-	_, err = network.NewVirtualNetwork(ctx, "virtualNetwork", &network.VirtualNetworkArgs{
+	vnet, err := network.NewVirtualNetwork(ctx, "virtualNetwork", &network.VirtualNetworkArgs{
 		AddressSpace: &network.AddressSpaceArgs{
 			AddressPrefixes: pulumi.StringArray{
 				pulumi.String("172.17.0.0/16"),
-			},
-		},
-		Subnets: []network.SubnetTypeArgs{
-			&network.SubnetTypeArgs{
-				AddressPrefix: pulumi.String("10.0.0.0/24"),
-				Name:          pulumi.String("test-1"),
 			},
 		},
 		ResourceGroupName:  resourceGroup.Name,
 		VirtualNetworkName: pulumi.String("test-vnet"),
 	})
 	utils.ExitOnError(err)
+
+	// Create Subnets
+	for _, subnet := range lookup.SpokeSubnets {
+		_, err = network.NewSubnet(ctx, subnet.Name, &network.SubnetArgs{
+			ResourceGroupName:  resourceGroup.Name,
+			AddressPrefix:      pulumi.String(subnet.AddressPrefix),
+			VirtualNetworkName: vnet.Name,
+		})
+		utils.ExitOnError(err)
+	}
 
 	return err
 }
