@@ -80,8 +80,34 @@ var (
 		},
 	}
 
+	referenceHubSubnets = []SubnetInfo{
+		{
+			Name:          "AzureFirewallSubnet",
+			Description:   "Subnet for Azure Firewall",
+			AddressPrefix: "172.16.0.0/26",
+		},
+		{
+			Name:          "AzureBastionSubnet",
+			Description:   "Subnet for Bastion",
+			AddressPrefix: "172.16.0.64/26",
+		},
+		{
+			Name:          "GatewaySubnet",
+			Description:   "Subnet for VPN Gateway",
+			AddressPrefix: "172.16.0.128/26",
+		},
+	}
+
+	// Template for creating spoke networks
 	ReferenceSpokeVNET = VNETInfo{
 		AddressPrefix: "172.x.0.0/16",
 		SubnetsInfo:   referenceSpokeSubnets,
+	}
+
+	// Template for creating a hub network
+	ReferenceHubVNET = VNETInfo{
+		Name:          "hub",
+		AddressPrefix: "172.16.0.0/24",
+		SubnetsInfo:   referenceHubSubnets,
 	}
 )

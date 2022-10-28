@@ -22,7 +22,7 @@ type SubnetInfo struct {
 	Description   string
 }
 
-func (v *VNETInfo) Generate(offset int) {
+func (v *VNETInfo) GenerateSpoke(offset int) {
 
 	// Add offset to second octet to generate 2nd octet number
 	//octetStartStr := strconv.Itoa(octetStart)
@@ -41,13 +41,15 @@ func (v *VNETInfo) Generate(offset int) {
 	}
 }
 
-func NewVnetTemplate(name string, offset ...int) *VNETInfo {
+// Returns an address prefix and subnet CIDRs used to create a vnet. The second octet of the
+// generated CIDRs are "0" by default and can changed via the "offset" parameter
+func NewSpokeVnetTemplate(name string, offset ...int) *VNETInfo {
 	vnet := &VNETInfo{}
 
 	if len(offset) == 0 {
-		vnet.Generate(0)
+		vnet.GenerateSpoke(0)
 	} else {
-		vnet.Generate(offset[0])
+		vnet.GenerateSpoke(offset[0])
 	}
 
 	vnet.Name = name
