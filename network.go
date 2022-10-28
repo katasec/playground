@@ -12,7 +12,7 @@ import (
 func NewDC(ctx *pulumi.Context) error {
 
 	// Create hub resource group and VNET
-	nprodResGroup, err := resources.NewResourceGroup(ctx, "playhubrg-", &resources.ResourceGroupArgs{})
+	nprodResGroup, err := resources.NewResourceGroup(ctx, "play-hubrg-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	CreateVNET(ctx, nprodResGroup, &azuredc.ReferenceHubVNET)
 
