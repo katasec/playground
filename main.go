@@ -9,5 +9,5 @@ var (
 )
 
 func main() {
-	pulumi.Run(Start)
+	pulumi.Run(NewDC)
 }

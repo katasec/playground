@@ -1,8 +1,8 @@
-package lookup
+package azuredc
 
 var (
-	octetStart       = 17
-	referenceSubnets = []SubnetTemplate{
+	octetStart            = 17
+	referenceSpokeSubnets = []SubnetInfo{
 		{
 			Name:          "snet-tier1-agw",
 			Description:   "Subnet for AGW",
@@ -80,8 +80,8 @@ var (
 		},
 	}
 
-	ReferenceVNET = VnetTemplate{
+	ReferenceSpokeVNET = VNETInfo{
 		AddressPrefix: "172.x.0.0/16",
-		Subnets:       referenceSubnets,
+		SubnetsInfo:   referenceSpokeSubnets,
 	}
 )
