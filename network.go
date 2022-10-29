@@ -12,18 +12,18 @@ import (
 func NewDC(ctx *pulumi.Context) error {
 
 	// Create hub resource group and VNET
-	nprodResGroup, err := resources.NewResourceGroup(ctx, "play-hubrg-", &resources.ResourceGroupArgs{})
+	nprodResGroup, err := resources.NewResourceGroup(ctx, "rg-play-hubrg-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	CreateVNET(ctx, nprodResGroup, &azuredc.ReferenceHubVNET)
 
 	// Create nprod resource group and VNET
-	nprodResGroup, err = resources.NewResourceGroup(ctx, "play-nprodrg-", &resources.ResourceGroupArgs{})
+	nprodResGroup, err = resources.NewResourceGroup(ctx, "rg-play-nprodrg-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	nprodCidrs := azuredc.NewSpokeVnetTemplate("nprod")
 	CreateVNET(ctx, nprodResGroup, nprodCidrs)
 
 	// Create prod resource group and VNET
-	prodResGroup, err := resources.NewResourceGroup(ctx, "play-prodrg-", &resources.ResourceGroupArgs{})
+	prodResGroup, err := resources.NewResourceGroup(ctx, "rg-play-prodrg-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	prodCidrs := azuredc.NewSpokeVnetTemplate("prod", 1)
 	CreateVNET(ctx, prodResGroup, prodCidrs)
