@@ -12,66 +12,48 @@ import (
 func NewDC(ctx *pulumi.Context) error {
 
 	// Create hub resource group and VNET
-	nprodResGroup, err := resources.NewResourceGroup(ctx, "rg-play-hubrg-", &resources.ResourceGroupArgs{})
+	hubrg, err := resources.NewResourceGroup(ctx, "rg-play-hubrg-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
-	CreateVNET(ctx, nprodResGroup, &azuredc.ReferenceHubVNET)
+	hubVnet := CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
+	//CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
 
 	// Create nprod resource group and VNET
-	nprodResGroup, err = resources.NewResourceGroup(ctx, "rg-play-nprodrg-", &resources.ResourceGroupArgs{})
+	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprodrg-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	nprodCidrs := azuredc.NewSpokeVnetTemplate("nprod")
-	CreateVNET(ctx, nprodResGroup, nprodCidrs)
+	nprodVnet := CreateVNET(ctx, nprodrg, nprodCidrs)
+	//CreateVNET(ctx, nprodrg, nprodCidrs)
 
 	// Create prod resource group and VNET
 	prodResGroup, err := resources.NewResourceGroup(ctx, "rg-play-prodrg-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	prodCidrs := azuredc.NewSpokeVnetTemplate("prod", 1)
-	CreateVNET(ctx, prodResGroup, prodCidrs)
+	prodVnet := CreateVNET(ctx, prodResGroup, prodCidrs)
+
+	peerNetworks(ctx, "hub-to-nprod", hubrg, hubVnet, nprodVnet)
+	peerNetworks(ctx, "nprod-to-hub", nprodrg, nprodVnet, hubVnet)
+
+	peerNetworks(ctx, "hub-to-prod", hubrg, hubVnet, prodVnet)
+	peerNetworks(ctx, "prod-to-hub", prodResGroup, prodVnet, hubVnet)
 
 	return err
 }
 
-// Creates an Azure Virtual Network and subnets using the provided VNETInfo
-func CreateVNET(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azuredc.VNETInfo) *network.VirtualNetwork {
-	// Create VNET
-	vnet, err := network.NewVirtualNetwork(ctx, vnetInfo.Name, &network.VirtualNetworkArgs{
-		AddressSpace: &network.AddressSpaceArgs{
-			AddressPrefixes: pulumi.StringArray{
-				pulumi.String(vnetInfo.AddressPrefix),
-			},
-		},
-		ResourceGroupName: rg.Name,
-		// Subnets:           network.SubnetTypeArray{
+func peerNetworks(ctx *pulumi.Context, urn string, srcRg *resources.ResourceGroup, src *network.VirtualNetwork, dst *network.VirtualNetwork) {
+	name := pulumi.Sprintf("%s-to-%s", src.Name, dst.Name)
+	_, err := network.NewVirtualNetworkPeering(ctx, urn, &network.VirtualNetworkPeeringArgs{
+		Name:                      name,
+		VirtualNetworkPeeringName: name,
+		ResourceGroupName:         srcRg.Name,
+		VirtualNetworkName:        src.Name,
 
-		// },
+		AllowForwardedTraffic:     pulumi.Bool(true),
+		AllowGatewayTransit:       pulumi.Bool(false),
+		AllowVirtualNetworkAccess: pulumi.Bool(true),
+		RemoteVirtualNetwork: &network.SubResourceArgs{
+			Id: dst.ID(),
+		},
+		UseRemoteGateways: pulumi.Bool(false),
 	})
 	utils.ExitOnError(err)
-
-	// Create Subnets
-	var previousSubnet *network.Subnet
-	var dependsOn pulumi.ResourceOption
-
-	for _, subnet := range vnetInfo.SubnetsInfo {
-
-		// Add previously create subnet as a dependency for the next subnet
-		// Avoids race conditions during create/destroy
-		if previousSubnet != nil {
-			dependsOn = pulumi.DependsOn([]pulumi.Resource{previousSubnet})
-		} else {
-			dependsOn = nil
-		}
-
-		// Create subnet
-		current, err := network.NewSubnet(ctx, vnetInfo.Name+"-"+subnet.Name, &network.SubnetArgs{
-			ResourceGroupName:  rg.Name,
-			AddressPrefix:      pulumi.String(subnet.AddressPrefix),
-			VirtualNetworkName: vnet.Name,
-		}, dependsOn)
-		utils.ExitOnError(err)
-
-		previousSubnet = current
-
-	}
-
-	return vnet
 }
