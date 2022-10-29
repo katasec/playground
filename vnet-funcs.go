@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/katasec/playground/azuredc"
 	"github.com/katasec/playground/utils"
 	network "github.com/pulumi/pulumi-azure-native/sdk/go/azure/network"
@@ -10,7 +13,7 @@ import (
 
 // Creates an Azure Virtual Network and subnets using the provided VNETInfo
 func CreateVNET(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azuredc.VNETInfo) *network.VirtualNetwork {
-	// Create VNET
+	// -- Create VNET
 	vnet, err := network.NewVirtualNetwork(ctx, vnetInfo.Name, &network.VirtualNetworkArgs{
 		AddressSpace: &network.AddressSpaceArgs{
 			AddressPrefixes: pulumi.StringArray{
@@ -24,10 +27,11 @@ func CreateVNET(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azur
 	})
 	utils.ExitOnError(err)
 
-	// Create Subnets
+	// -- Create Subnets
 	var previousSubnet *network.Subnet
 	var dependsOn pulumi.ResourceOption
 
+	// Loop through the provided list of subnet info
 	for _, subnet := range vnetInfo.SubnetsInfo {
 
 		// Add previously create subnet as a dependency for the next subnet
@@ -39,7 +43,16 @@ func CreateVNET(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azur
 		}
 
 		// Create subnet
-		current, err := network.NewSubnet(ctx, vnetInfo.Name+"-"+subnet.Name, &network.SubnetArgs{
+		var subnetName string
+		if strings.ToLower(vnetInfo.Name) != "hub" {
+			subnetName = vnetInfo.Name + "-" + subnet.Name
+		} else {
+			subnetName = subnet.Name
+		}
+
+		fmt.Println("Subnet name:" + subnetName)
+		current, err := network.NewSubnet(ctx, subnetName, &network.SubnetArgs{
+			Name:               pulumi.String(subnetName),
 			ResourceGroupName:  rg.Name,
 			AddressPrefix:      pulumi.String(subnet.AddressPrefix),
 			VirtualNetworkName: vnet.Name,
@@ -47,7 +60,6 @@ func CreateVNET(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azur
 		utils.ExitOnError(err)
 
 		previousSubnet = current
-
 	}
 
 	return vnet

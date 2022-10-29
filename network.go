@@ -12,29 +12,33 @@ import (
 func NewDC(ctx *pulumi.Context) error {
 
 	// Create hub resource group and VNET
-	hubrg, err := resources.NewResourceGroup(ctx, "rg-play-hubrg-", &resources.ResourceGroupArgs{})
+	hubrg, err := resources.NewResourceGroup(ctx, "rg-play-hub-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	hubVnet := CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
 	//CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
 
 	// Create nprod resource group and VNET
-	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprodrg-", &resources.ResourceGroupArgs{})
+	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprod-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	nprodCidrs := azuredc.NewSpokeVnetTemplate("nprod")
 	nprodVnet := CreateVNET(ctx, nprodrg, nprodCidrs)
-	//CreateVNET(ctx, nprodrg, nprodCidrs)
 
 	// Create prod resource group and VNET
-	prodResGroup, err := resources.NewResourceGroup(ctx, "rg-play-prodrg-", &resources.ResourceGroupArgs{})
+	prodResGroup, err := resources.NewResourceGroup(ctx, "rg-play-prod-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	prodCidrs := azuredc.NewSpokeVnetTemplate("prod", 1)
 	prodVnet := CreateVNET(ctx, prodResGroup, prodCidrs)
 
+	// Peer hub to nprod
 	peerNetworks(ctx, "hub-to-nprod", hubrg, hubVnet, nprodVnet)
 	peerNetworks(ctx, "nprod-to-hub", nprodrg, nprodVnet, hubVnet)
 
+	// Peer hub to prod
 	peerNetworks(ctx, "hub-to-prod", hubrg, hubVnet, prodVnet)
 	peerNetworks(ctx, "prod-to-hub", prodResGroup, prodVnet, hubVnet)
+
+	// Create Firewall in Hub
+	createFirewall(ctx, hubrg, hubVnet)
 
 	return err
 }
@@ -56,4 +60,41 @@ func peerNetworks(ctx *pulumi.Context, urn string, srcRg *resources.ResourceGrou
 		UseRemoteGateways: pulumi.Bool(false),
 	})
 	utils.ExitOnError(err)
+}
+
+func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) {
+
+	publicIp, _ := network.NewPublicIPAddress(ctx, "fwip", &network.PublicIPAddressArgs{
+		ResourceGroupName:        rg.Name,
+		PublicIPAllocationMethod: pulumi.String("Static"),
+		Sku: &network.PublicIPAddressSkuArgs{
+			Name: pulumi.String("Standard"),
+			Tier: pulumi.String("Global"),
+		},
+	})
+
+	fwSubnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
+		ResourceGroupName:  rg.Name,
+		SubnetName:         pulumi.String("AzureFirewallSubnet"),
+		VirtualNetworkName: vnet.Name,
+	})
+
+	network.NewAzureFirewall(ctx, "hubfirewall", &network.AzureFirewallArgs{
+		ResourceGroupName: rg.Name,
+		Sku: &network.AzureFirewallSkuArgs{
+			Name: pulumi.String("AZFW_VNet"),
+			Tier: pulumi.String("Standard"),
+		},
+		IpConfigurations: &network.AzureFirewallIPConfigurationArray{
+			network.AzureFirewallIPConfigurationArgs{
+				Name: pulumi.String("firewall-ip-config"),
+				PublicIPAddress: network.SubResourceArgs{
+					Id: publicIp.ID(),
+				},
+				Subnet: network.SubResourceArgs{
+					Id: fwSubnet.Id(),
+				},
+			},
+		},
+	})
 }
