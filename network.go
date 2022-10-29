@@ -96,5 +96,5 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 				},
 			},
 		},
-	})
+	}, pulumi.DependsOn([]pulumi.Resource{vnet}))
 }
