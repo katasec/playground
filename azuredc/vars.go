@@ -97,7 +97,7 @@ var (
 			AddressPrefix: "172.16.0.128/26",
 		},
 		{
-			Name:          "ACISubnet",
+			Name:          "snet-hub-aci",
 			Description:   "Subnet for VPN Gateway",
 			AddressPrefix: "172.16.0.192/26",
 		},
