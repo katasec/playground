@@ -26,10 +26,10 @@ func NewDC(ctx *pulumi.Context) error {
 	nprodVnet := CreateVNET(ctx, nprodrg, nprodCidrs)
 
 	// Create prod resource group and VNET
-	prodResGroup, err := resources.NewResourceGroup(ctx, "rg-play-prod-", &resources.ResourceGroupArgs{})
+	prodrg, err := resources.NewResourceGroup(ctx, "rg-play-prod-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	prodCidrs := azuredc.NewSpokeVnetTemplate("prod", 1)
-	prodVnet := CreateVNET(ctx, prodResGroup, prodCidrs)
+	prodVnet := CreateVNET(ctx, prodrg, prodCidrs)
 
 	// Peer hub to nprod
 	peerNetworks(ctx, "hub-to-nprod", hubrg, hubVnet, nprodVnet)
@@ -37,7 +37,7 @@ func NewDC(ctx *pulumi.Context) error {
 
 	// Peer hub to prod
 	peerNetworks(ctx, "hub-to-prod", hubrg, hubVnet, prodVnet)
-	peerNetworks(ctx, "prod-to-hub", prodResGroup, prodVnet, hubVnet)
+	peerNetworks(ctx, "prod-to-hub", prodrg, prodVnet, hubVnet)
 
 	// Create nprod routes
 	createRoutes(ctx, nprodrg, "rt-nprod", firewall)
@@ -110,7 +110,7 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 func createRoutes(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName string, firewall *network.AzureFirewall) {
 
 	// Create Table
-	routeTable, err := network.NewRouteTable(ctx, "routeTable", &network.RouteTableArgs{
+	routeTable, err := network.NewRouteTable(ctx, tableName, &network.RouteTableArgs{
 		ResourceGroupName: rg.Name,
 		RouteTableName:    pulumi.String(tableName),
 	})
