@@ -17,7 +17,7 @@ func NewDC(ctx *pulumi.Context) error {
 	hubVnet := CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
 
 	// Create Firewall in Hub
-	createFirewall(ctx, hubrg, hubVnet)
+	firewall := createFirewall(ctx, hubrg, hubVnet)
 
 	// Create nprod resource group and VNET
 	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprod-", &resources.ResourceGroupArgs{})
@@ -38,6 +38,12 @@ func NewDC(ctx *pulumi.Context) error {
 	// Peer hub to prod
 	peerNetworks(ctx, "hub-to-prod", hubrg, hubVnet, prodVnet)
 	peerNetworks(ctx, "prod-to-hub", prodResGroup, prodVnet, hubVnet)
+
+	// Create nprod routes
+	createRoutes(ctx, nprodrg, "rt-nprod", firewall)
+
+	// Create prod routes
+	createRoutes(ctx, prodrg, "rt-prod", firewall)
 
 	return err
 }
@@ -99,4 +105,26 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 	utils.ExitOnError(err)
 
 	return firewall
+}
+
+func createRoutes(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName string, firewall *network.AzureFirewall) {
+
+	// Create Table
+	routeTable, err := network.NewRouteTable(ctx, "routeTable", &network.RouteTableArgs{
+		ResourceGroupName: rg.Name,
+		RouteTableName:    pulumi.String(tableName),
+	})
+	utils.ExitOnError(err)
+
+	// Create route to firewall
+	_, err = network.NewRoute(ctx, tableName+"-firewall-route", &network.RouteArgs{
+		AddressPrefix:     pulumi.String("0.0.0.0/0"),
+		NextHopType:       pulumi.String("VirtualAppliance"),
+		ResourceGroupName: rg.Name,
+		RouteName:         pulumi.String("firewall-route"),
+		RouteTableName:    routeTable.Name,
+		NextHopIpAddress:  firewall.IpConfigurations.Index(pulumi.Int(0)).PrivateIPAddress(),
+	})
+
+	utils.ExitOnError(err)
 }
