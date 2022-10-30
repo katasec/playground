@@ -5,6 +5,7 @@ import (
 	"github.com/katasec/playground/utils"
 	network "github.com/pulumi/pulumi-azure-native/sdk/go/azure/network"
 	"github.com/pulumi/pulumi-azure-native/sdk/go/azure/resources"
+
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -14,7 +15,7 @@ func NewDC(ctx *pulumi.Context) error {
 	// Create hub resource group and VNET
 	hubrg, err := resources.NewResourceGroup(ctx, "rg-play-hub-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
-	hubVnet := CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
+	hubVnet := CreateHub(ctx, hubrg, &azuredc.ReferenceHubVNET)
 
 	// Create Firewall in Hub
 	firewall := createFirewall(ctx, hubrg, hubVnet)
@@ -22,14 +23,24 @@ func NewDC(ctx *pulumi.Context) error {
 	// Create nprod resource group and VNET
 	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprod-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
+
+	// Create nprod route to firewall
+	nprdRoute := createFWRoute(ctx, nprodrg, "rt-nprod", firewall)
+
+	// Create Spoke VNET with nprod route
 	nprodCidrs := azuredc.NewSpokeVnetTemplate("nprod")
-	nprodVnet := CreateVNET(ctx, nprodrg, nprodCidrs)
+	nprodVnet := CreateVNET(ctx, nprodrg, nprodCidrs, nprdRoute)
 
 	// Create prod resource group and VNET
 	prodrg, err := resources.NewResourceGroup(ctx, "rg-play-prod-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
+
+	// Create prod route to firewall
+	prdRoute := createFWRoute(ctx, prodrg, "rt-prod", firewall)
+
+	// Create Spoke VNET with prod route
 	prodCidrs := azuredc.NewSpokeVnetTemplate("prod", 1)
-	prodVnet := CreateVNET(ctx, prodrg, prodCidrs)
+	prodVnet := CreateVNET(ctx, prodrg, prodCidrs, prdRoute)
 
 	// Peer hub to nprod
 	peerNetworks(ctx, "hub-to-nprod", hubrg, hubVnet, nprodVnet)
@@ -38,12 +49,6 @@ func NewDC(ctx *pulumi.Context) error {
 	// Peer hub to prod
 	peerNetworks(ctx, "hub-to-prod", hubrg, hubVnet, prodVnet)
 	peerNetworks(ctx, "prod-to-hub", prodrg, prodVnet, hubVnet)
-
-	// Create nprod routes
-	createRoutes(ctx, nprodrg, "rt-nprod", firewall)
-
-	// Create prod routes
-	createRoutes(ctx, prodrg, "rt-prod", firewall)
 
 	return err
 }
@@ -107,7 +112,7 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 	return firewall
 }
 
-func createRoutes(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName string, firewall *network.AzureFirewall) {
+func createFWRoute(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName string, firewall *network.AzureFirewall) *network.RouteTable {
 
 	// Create Table
 	routeTable, err := network.NewRouteTable(ctx, tableName, &network.RouteTableArgs{
@@ -125,6 +130,7 @@ func createRoutes(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName st
 		RouteTableName:    routeTable.Name,
 		NextHopIpAddress:  firewall.IpConfigurations.Index(pulumi.Int(0)).PrivateIPAddress(),
 	})
-
 	utils.ExitOnError(err)
+
+	return routeTable
 }
