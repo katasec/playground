@@ -15,7 +15,9 @@ func NewDC(ctx *pulumi.Context) error {
 	hubrg, err := resources.NewResourceGroup(ctx, "rg-play-hub-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 	hubVnet := CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
-	//CreateVNET(ctx, hubrg, &azuredc.ReferenceHubVNET)
+
+	// Create Firewall in Hub
+	createFirewall(ctx, hubrg, hubVnet)
 
 	// Create nprod resource group and VNET
 	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprod-", &resources.ResourceGroupArgs{})
@@ -36,9 +38,6 @@ func NewDC(ctx *pulumi.Context) error {
 	// Peer hub to prod
 	peerNetworks(ctx, "hub-to-prod", hubrg, hubVnet, prodVnet)
 	peerNetworks(ctx, "prod-to-hub", prodResGroup, prodVnet, hubVnet)
-
-	// Create Firewall in Hub
-	createFirewall(ctx, hubrg, hubVnet)
 
 	return err
 }
@@ -62,14 +61,14 @@ func peerNetworks(ctx *pulumi.Context, urn string, srcRg *resources.ResourceGrou
 	utils.ExitOnError(err)
 }
 
-func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) {
+func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) *network.AzureFirewall {
 
 	publicIp, _ := network.NewPublicIPAddress(ctx, "fwip", &network.PublicIPAddressArgs{
 		ResourceGroupName:        rg.Name,
 		PublicIPAllocationMethod: pulumi.String("Static"),
 		Sku: &network.PublicIPAddressSkuArgs{
 			Name: pulumi.String("Standard"),
-			Tier: pulumi.String("Global"),
+			Tier: pulumi.String("Regional"),
 		},
 	})
 
@@ -79,7 +78,7 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 		VirtualNetworkName: vnet.Name,
 	})
 
-	network.NewAzureFirewall(ctx, "hubfirewall", &network.AzureFirewallArgs{
+	firewall, err := network.NewAzureFirewall(ctx, "hubfirewall", &network.AzureFirewallArgs{
 		ResourceGroupName: rg.Name,
 		Sku: &network.AzureFirewallSkuArgs{
 			Name: pulumi.String("AZFW_VNet"),
@@ -87,7 +86,7 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 		},
 		IpConfigurations: &network.AzureFirewallIPConfigurationArray{
 			network.AzureFirewallIPConfigurationArgs{
-				Name: pulumi.String("firewall-ip-config"),
+				Name: pulumi.String("configuration"),
 				PublicIPAddress: network.SubResourceArgs{
 					Id: publicIp.ID(),
 				},
@@ -97,4 +96,7 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 			},
 		},
 	}, pulumi.DependsOn([]pulumi.Resource{vnet}))
+	utils.ExitOnError(err)
+
+	return firewall
 }
