@@ -40,7 +40,7 @@ func CreateVNET(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azur
 }
 
 // Creates an Azure Virtual Network and subnets using the provided VNETInfo
-func CreateHub(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azuredc.VNETInfo) *network.VirtualNetwork {
+func CreateHub(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azuredc.VNETInfo) (*network.VirtualNetwork, *network.AzureFirewall) {
 
 	// Generate list of subnets to create
 	subnets := network.SubnetTypeArray{}
@@ -51,7 +51,7 @@ func CreateHub(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azure
 		})
 	}
 
-	// -- Create VNET
+	// Create VNET _ subnets
 	vnet, err := network.NewVirtualNetwork(ctx, vnetInfo.Name, &network.VirtualNetworkArgs{
 		AddressSpace: &network.AddressSpaceArgs{
 			AddressPrefixes: pulumi.StringArray{
@@ -62,7 +62,9 @@ func CreateHub(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azure
 		Subnets:           &subnets,
 	})
 
+	// Create Firewall
+	firewall := createFirewall(ctx, rg, vnet)
 	utils.ExitOnError(err)
 
-	return vnet
+	return vnet, firewall
 }

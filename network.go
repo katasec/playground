@@ -18,10 +18,10 @@ func NewDC(ctx *pulumi.Context) error {
 	// Create hub resource group and VNET
 	hubrg, err := resources.NewResourceGroup(ctx, "rg-play-hub-", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
-	hubVnet := CreateHub(ctx, hubrg, &azuredc.ReferenceHubVNET)
+	hubVnet, firewall := CreateHub(ctx, hubrg, &azuredc.ReferenceHubVNET)
 
 	// Create Firewall in Hub
-	firewall := createFirewall(ctx, hubrg, hubVnet)
+	//firewall := createFirewall(ctx, hubrg, hubVnet)
 
 	// Create nprod resource group and VNET
 	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprod-", &resources.ResourceGroupArgs{})
@@ -79,6 +79,7 @@ func peerNetworks(ctx *pulumi.Context, urn string, srcRg *resources.ResourceGrou
 
 func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) *network.AzureFirewall {
 
+	// Create an Management IP for the Basic firewall for Azure Service Traffic
 	managementIp, _ := network.NewPublicIPAddress(ctx, "fw-mgmt-ip", &network.PublicIPAddressArgs{
 		ResourceGroupName:        rg.Name,
 		PublicIPAllocationMethod: pulumi.String("Static"),
@@ -88,6 +89,7 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 		},
 	})
 
+	// Create a public IP for Firewall for inbound/outbound traffic
 	publicIp, _ := network.NewPublicIPAddress(ctx, "fwip", &network.PublicIPAddressArgs{
 		ResourceGroupName:        rg.Name,
 		PublicIPAllocationMethod: pulumi.String("Static"),
@@ -97,18 +99,21 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 		},
 	})
 
+	// Look up the firewall subnet
 	fwSubnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
 		ResourceGroupName:  rg.Name,
 		SubnetName:         pulumi.String("AzureFirewallSubnet"),
 		VirtualNetworkName: vnet.Name,
 	})
 
+	// Look up the mgmt subnet subnet
 	mgmtfwSubnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
 		ResourceGroupName:  rg.Name,
 		SubnetName:         pulumi.String("AzureFirewallManagementSubnet"),
 		VirtualNetworkName: vnet.Name,
 	})
 
+	// Create a firewall
 	firewall, err := network.NewAzureFirewall(ctx, "hubfirewall", &network.AzureFirewallArgs{
 		ResourceGroupName: rg.Name,
 		Sku: &network.AzureFirewallSkuArgs{
