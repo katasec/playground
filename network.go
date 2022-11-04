@@ -24,8 +24,39 @@ func NewDC(ctx *pulumi.Context) error {
 
 	AddSpoke(ctx, "nprod", hubrg, hubVnet, firewall, 0)
 	AddSpoke(ctx, "prod", hubrg, hubVnet, firewall, 1)
+	AddSpoke(ctx, "nprod2", hubrg, hubVnet, firewall, 2)
 
 	return err
+}
+
+// Creates an Azure Virtual Network and subnets using the provided VNETInfo
+func CreateHub(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azuredc.VNETInfo) (*network.VirtualNetwork, *network.AzureFirewall) {
+
+	// Generate list of subnets to create
+	subnets := network.SubnetTypeArray{}
+	for _, subnet := range vnetInfo.SubnetsInfo {
+		subnets = append(subnets, network.SubnetTypeArgs{
+			AddressPrefix: pulumi.String(subnet.AddressPrefix),
+			Name:          pulumi.String(subnet.Name),
+		})
+	}
+
+	// Create VNET + subnets
+	vnet, err := network.NewVirtualNetwork(ctx, vnetInfo.Name, &network.VirtualNetworkArgs{
+		AddressSpace: &network.AddressSpaceArgs{
+			AddressPrefixes: pulumi.StringArray{
+				pulumi.String(vnetInfo.AddressPrefix),
+			},
+		},
+		ResourceGroupName: rg.Name,
+		Subnets:           &subnets,
+	})
+
+	// Create Firewall
+	firewall := createFirewall(ctx, rg, vnet)
+	utils.ExitOnError(err)
+
+	return vnet, firewall
 }
 
 func AddSpoke(ctx *pulumi.Context, spokeName string, hubrg *resources.ResourceGroup, hubVnet *network.VirtualNetwork, firewall *network.AzureFirewall, offset int) {
@@ -53,117 +84,6 @@ func AddSpoke(ctx *pulumi.Context, spokeName string, hubrg *resources.ResourceGr
 	pulumiUrn2 := fmt.Sprintf("%s-to-hub", spokeName)
 	peerNetworks(ctx, pulumiUrn2, spokeRg, nprodVnet, hubVnet)
 
-}
-
-func peerNetworks(ctx *pulumi.Context, pulumiUrn string, srcRg *resources.ResourceGroup, src *network.VirtualNetwork, dst *network.VirtualNetwork) {
-	peeringName := pulumi.Sprintf("%s-to-%s", src.Name, dst.Name)
-	_, err := network.NewVirtualNetworkPeering(ctx, pulumiUrn, &network.VirtualNetworkPeeringArgs{
-		Name:                      peeringName,
-		VirtualNetworkPeeringName: peeringName,
-		ResourceGroupName:         srcRg.Name,
-		VirtualNetworkName:        src.Name,
-
-		AllowForwardedTraffic:     pulumi.Bool(true),
-		AllowGatewayTransit:       pulumi.Bool(false),
-		AllowVirtualNetworkAccess: pulumi.Bool(true),
-		RemoteVirtualNetwork: &network.SubResourceArgs{
-			Id: dst.ID(),
-		},
-		UseRemoteGateways: pulumi.Bool(false),
-	})
-	utils.ExitOnError(err)
-}
-
-func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) *network.AzureFirewall {
-
-	// Create an Management IP for the Basic firewall for Azure Service Traffic
-	managementIp, _ := network.NewPublicIPAddress(ctx, "fw-mgmt-ip", &network.PublicIPAddressArgs{
-		ResourceGroupName:        rg.Name,
-		PublicIPAllocationMethod: pulumi.String("Static"),
-		Sku: &network.PublicIPAddressSkuArgs{
-			Name: pulumi.String("Standard"),
-			Tier: pulumi.String("Regional"),
-		},
-	})
-
-	// Create a public IP for Firewall for inbound/outbound traffic
-	publicIp, _ := network.NewPublicIPAddress(ctx, "fwip", &network.PublicIPAddressArgs{
-		ResourceGroupName:        rg.Name,
-		PublicIPAllocationMethod: pulumi.String("Static"),
-		Sku: &network.PublicIPAddressSkuArgs{
-			Name: pulumi.String("Standard"),
-			Tier: pulumi.String("Regional"),
-		},
-	})
-
-	// Look up the firewall subnet
-	fwSubnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
-		ResourceGroupName:  rg.Name,
-		SubnetName:         pulumi.String("AzureFirewallSubnet"),
-		VirtualNetworkName: vnet.Name,
-	})
-
-	// Look up the mgmt subnet subnet
-	mgmtfwSubnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
-		ResourceGroupName:  rg.Name,
-		SubnetName:         pulumi.String("AzureFirewallManagementSubnet"),
-		VirtualNetworkName: vnet.Name,
-	})
-
-	// Create a firewall
-	firewall, err := network.NewAzureFirewall(ctx, "hubfirewall", &network.AzureFirewallArgs{
-		ResourceGroupName: rg.Name,
-		Sku: &network.AzureFirewallSkuArgs{
-			Name: pulumi.String("AZFW_VNet"),
-			Tier: pulumi.String("Basic"),
-		},
-		IpConfigurations: &network.AzureFirewallIPConfigurationArray{
-			network.AzureFirewallIPConfigurationArgs{
-				Name: pulumi.String("configuration"),
-				PublicIPAddress: network.SubResourceArgs{
-					Id: publicIp.ID(),
-				},
-				Subnet: network.SubResourceArgs{
-					Id: fwSubnet.Id(),
-				},
-			},
-		},
-		ManagementIpConfiguration: &network.AzureFirewallIPConfigurationArgs{
-			Name: pulumi.String("mgmt-configuration"),
-			PublicIPAddress: network.SubResourceArgs{
-				Id: managementIp.ID(),
-			},
-			Subnet: network.SubResourceArgs{
-				Id: mgmtfwSubnet.Id(),
-			},
-		},
-	}, pulumi.DependsOn([]pulumi.Resource{vnet}))
-	utils.ExitOnError(err)
-
-	return firewall
-}
-
-func createFWRoute(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName string, firewall *network.AzureFirewall) *network.RouteTable {
-
-	// Create Table
-	routeTable, err := network.NewRouteTable(ctx, tableName, &network.RouteTableArgs{
-		ResourceGroupName: rg.Name,
-		RouteTableName:    pulumi.String(tableName),
-	})
-	utils.ExitOnError(err)
-
-	// Create route to firewall
-	_, err = network.NewRoute(ctx, tableName+"-firewall-route", &network.RouteArgs{
-		AddressPrefix:     pulumi.String("0.0.0.0/0"),
-		NextHopType:       pulumi.String("VirtualAppliance"),
-		ResourceGroupName: rg.Name,
-		RouteName:         pulumi.String("firewall-route"),
-		RouteTableName:    routeTable.Name,
-		NextHopIpAddress:  firewall.IpConfigurations.Index(pulumi.Int(0)).PrivateIPAddress(),
-	})
-	utils.ExitOnError(err)
-
-	return routeTable
 }
 
 func StartContainers(ctx *pulumi.Context, rg *resources.ResourceGroup, hub *network.VirtualNetwork) {
