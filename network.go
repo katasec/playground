@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/katasec/playground/azuredc"
 	"github.com/katasec/playground/utils"
 	containerinstance "github.com/pulumi/pulumi-azure-native/sdk/go/azure/containerinstance"
@@ -20,49 +22,44 @@ func NewDC(ctx *pulumi.Context) error {
 	utils.ExitOnError(err)
 	hubVnet, firewall := CreateHub(ctx, hubrg, &azuredc.ReferenceHubVNET)
 
-	// Create Firewall in Hub
-	//firewall := createFirewall(ctx, hubrg, hubVnet)
+	AddSpoke(ctx, "nprod", hubrg, hubVnet, firewall, 0)
+	AddSpoke(ctx, "prod", hubrg, hubVnet, firewall, 1)
 
-	// Create nprod resource group and VNET
-	nprodrg, err := resources.NewResourceGroup(ctx, "rg-play-nprod-", &resources.ResourceGroupArgs{})
-	utils.ExitOnError(err)
-
-	// Create nprod route to firewall
-	nprdRoute := createFWRoute(ctx, nprodrg, "rt-nprod", firewall)
-
-	// Create Spoke VNET with nprod route
-	nprodCidrs := azuredc.NewSpokeVnetTemplate("nprod")
-	nprodVnet := CreateVNET(ctx, nprodrg, nprodCidrs, nprdRoute)
-
-	// Create prod resource group and VNET
-	prodrg, err := resources.NewResourceGroup(ctx, "rg-play-prod-", &resources.ResourceGroupArgs{})
-	utils.ExitOnError(err)
-
-	// Create prod route to firewall
-	prdRoute := createFWRoute(ctx, prodrg, "rt-prod", firewall)
-
-	// Create Spoke VNET with prod route
-	prodCidrs := azuredc.NewSpokeVnetTemplate("prod", 1)
-	prodVnet := CreateVNET(ctx, prodrg, prodCidrs, prdRoute)
-
-	// Peer hub to nprod
-	peerNetworks(ctx, "hub-to-nprod", hubrg, hubVnet, nprodVnet)
-	peerNetworks(ctx, "nprod-to-hub", nprodrg, nprodVnet, hubVnet)
-
-	// Peer hub to prod
-	peerNetworks(ctx, "hub-to-prod", hubrg, hubVnet, prodVnet)
-	peerNetworks(ctx, "prod-to-hub", prodrg, prodVnet, hubVnet)
-
-	// Spin up a container instance
-	//StartContainers(ctx, hubrg, hubVnet)
 	return err
 }
 
-func peerNetworks(ctx *pulumi.Context, urn string, srcRg *resources.ResourceGroup, src *network.VirtualNetwork, dst *network.VirtualNetwork) {
-	name := pulumi.Sprintf("%s-to-%s", src.Name, dst.Name)
-	_, err := network.NewVirtualNetworkPeering(ctx, urn, &network.VirtualNetworkPeeringArgs{
-		Name:                      name,
-		VirtualNetworkPeeringName: name,
+func AddSpoke(ctx *pulumi.Context, spokeName string, hubrg *resources.ResourceGroup, hubVnet *network.VirtualNetwork, firewall *network.AzureFirewall, offset int) {
+
+	// Create a resource group
+	rgName := fmt.Sprintf("%s-%s-", azuredc.RgPrefix, spokeName)
+	spokeRg, err := resources.NewResourceGroup(ctx, rgName, &resources.ResourceGroupArgs{})
+	utils.ExitOnError(err)
+
+	// Create a route to firewall
+	routeName := fmt.Sprintf("rt-%s", spokeName)
+	spokeRoute := createFWRoute(ctx, spokeRg, routeName, firewall)
+
+	// Generate CIDRs
+	spokeCidrs := azuredc.NewSpokeVnetTemplate(spokeName, offset)
+
+	// Create VNET using generated ResourceGroup, Route & CIDRs
+	nprodVnet := CreateVNET(ctx, spokeRg, spokeCidrs, spokeRoute)
+
+	// Peer hub with spoke
+	pulumiUrn1 := fmt.Sprintf("hub-to-%s", spokeName)
+	peerNetworks(ctx, pulumiUrn1, hubrg, hubVnet, nprodVnet)
+
+	// Peer spoke with hub
+	pulumiUrn2 := fmt.Sprintf("%s-to-hub", spokeName)
+	peerNetworks(ctx, pulumiUrn2, spokeRg, nprodVnet, hubVnet)
+
+}
+
+func peerNetworks(ctx *pulumi.Context, pulumiUrn string, srcRg *resources.ResourceGroup, src *network.VirtualNetwork, dst *network.VirtualNetwork) {
+	peeringName := pulumi.Sprintf("%s-to-%s", src.Name, dst.Name)
+	_, err := network.NewVirtualNetworkPeering(ctx, pulumiUrn, &network.VirtualNetworkPeeringArgs{
+		Name:                      peeringName,
+		VirtualNetworkPeeringName: peeringName,
 		ResourceGroupName:         srcRg.Name,
 		VirtualNetworkName:        src.Name,
 

@@ -1,6 +1,7 @@
 package azuredc
 
 var (
+	RgPrefix              = "rg-play"
 	octetStart            = 17
 	referenceSpokeSubnets = []SubnetInfo{
 		{
