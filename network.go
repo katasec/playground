@@ -2,16 +2,20 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 
 	"github.com/katasec/playground/azuredc"
 	"github.com/katasec/playground/utils"
-	containerinstance "github.com/pulumi/pulumi-azure-native/sdk/go/azure/containerinstance"
 	network "github.com/pulumi/pulumi-azure-native/sdk/go/azure/network"
 	"github.com/pulumi/pulumi-azure-native/sdk/go/azure/resources"
-
+	computec "github.com/pulumi/pulumi-azure/sdk/v5/go/azure/compute"
+	networkc "github.com/pulumi/pulumi-azure/sdk/v5/go/azure/network"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	// github.com/pulumi/pulumi-azure/sdk/v4/go/azure
-	// github.com/pulumi/pulumi-azure/sdk/v4/go/azure
+)
+
+var (
+	runvms = false
 )
 
 // NewDC creates a new data centre based on a reference azuredc
@@ -22,10 +26,17 @@ func NewDC(ctx *pulumi.Context) error {
 	utils.ExitOnError(err)
 	hubVnet, firewall := CreateHub(ctx, hubrg, &azuredc.ReferenceHubVNET)
 
-	AddSpoke(ctx, "nprod", hubrg, hubVnet, firewall, 0)
-	AddSpoke(ctx, "prod", hubrg, hubVnet, firewall, 1)
-	AddSpoke(ctx, "nprod2", hubrg, hubVnet, firewall, 2)
+	// Create some spokes
+	rg1, vnet1 := AddSpoke(ctx, "nprod", hubrg, hubVnet, firewall, 0)
+	rg2, vnet2 := AddSpoke(ctx, "prod", hubrg, hubVnet, firewall, 1)
+	// AddSpoke(ctx, "nprod2", hubrg, hubVnet, firewall, 2)
 
+	// Launch some vms
+	if runvms {
+		launchVM(ctx, hubVnet, hubrg, "snet-test", "vm01")
+		launchVM(ctx, vnet1, rg1, "snet-tier2-vm", "vm02")
+		launchVM(ctx, vnet2, rg2, "snet-tier2-vm", "vm03")
+	}
 	return err
 }
 
@@ -59,78 +70,88 @@ func CreateHub(ctx *pulumi.Context, rg *resources.ResourceGroup, vnetInfo *azure
 	return vnet, firewall
 }
 
-func AddSpoke(ctx *pulumi.Context, spokeName string, hubrg *resources.ResourceGroup, hubVnet *network.VirtualNetwork, firewall *network.AzureFirewall, offset int) {
+func AddSpoke(ctx *pulumi.Context, spokeName string, hubrg *resources.ResourceGroup, hubVnet *network.VirtualNetwork, firewall *network.AzureFirewall, offset int) (*resources.ResourceGroup, *network.VirtualNetwork) {
 
 	// Create a resource group
 	rgName := fmt.Sprintf("%s-%s-", azuredc.RgPrefix, spokeName)
-	spokeRg, err := resources.NewResourceGroup(ctx, rgName, &resources.ResourceGroupArgs{})
+	rg, err := resources.NewResourceGroup(ctx, rgName, &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
 
 	// Create a route to firewall
 	routeName := fmt.Sprintf("rt-%s", spokeName)
-	spokeRoute := createFWRoute(ctx, spokeRg, routeName, firewall)
+	spokeRoute := createFWRoute(ctx, rg, routeName, firewall)
 
 	// Generate CIDRs
 	spokeCidrs := azuredc.NewSpokeVnetTemplate(spokeName, offset)
 
 	// Create VNET using generated ResourceGroup, Route & CIDRs
-	nprodVnet := CreateVNET(ctx, spokeRg, spokeCidrs, spokeRoute)
+	vnet := CreateVNET(ctx, rg, spokeCidrs, spokeRoute)
 
 	// Peer hub with spoke
 	pulumiUrn1 := fmt.Sprintf("hub-to-%s", spokeName)
-	peerNetworks(ctx, pulumiUrn1, hubrg, hubVnet, nprodVnet)
+	peerNetworks(ctx, pulumiUrn1, hubrg, hubVnet, vnet)
 
 	// Peer spoke with hub
 	pulumiUrn2 := fmt.Sprintf("%s-to-hub", spokeName)
-	peerNetworks(ctx, pulumiUrn2, spokeRg, nprodVnet, hubVnet)
+	peerNetworks(ctx, pulumiUrn2, rg, vnet, hubVnet)
+
+	return rg, vnet
 
 }
 
-func StartContainers(ctx *pulumi.Context, rg *resources.ResourceGroup, hub *network.VirtualNetwork) {
-	// containerinstance.NewContainerGroup(ctx, "bash", &containerinstance.ContainerGroupArgs{
-	// 	ContainerGroupName: pulumi.String("bash"),
-	// 	ResourceGroupName:  rg.Name,
-	// 	Containers: containerinstance.ContainerArray{
-	// 		containerinstance.ContainerArgs{
-	// 			Image: pulumi.String("registry.hub.docker.com/library/bash"),
-	// 			Command: pulumi.StringArray{
-	// 				pulumi.String("/usr/local/bin/bash"),
-	// 				pulumi.String("-c"),
-	// 				pulumi.String("echo hello; sleep 100000"),
-	// 			},
-	// 		},
-	// 	},
-	// })
+func launchVM(ctx *pulumi.Context, vnet *network.VirtualNetwork, rg *resources.ResourceGroup, subnetName string, vmName string) {
 
-	_, err := containerinstance.NewContainerGroup(ctx, "bash", &containerinstance.ContainerGroupArgs{
-		OsType:             pulumi.String("Linux"),
-		ContainerGroupName: pulumi.String("bash"),
+	// Look up the firewall subnet
+	subnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
 		ResourceGroupName:  rg.Name,
-		Containers: containerinstance.ContainerArray{
-			containerinstance.ContainerArgs{
-				Name: pulumi.String("hello-world"),
-				Resources: containerinstance.ResourceRequirementsArgs{
-					Limits: containerinstance.ResourceLimitsArgs{
-						Cpu:        pulumi.Float64(0.5),
-						MemoryInGB: pulumi.Float64(1.5),
-					},
-					Requests: containerinstance.ResourceRequestsArgs{
-						Cpu:        pulumi.Float64(0.5),
-						MemoryInGB: pulumi.Float64(1.5),
-					},
-				},
-				Image: pulumi.String("registry.hub.docker.com/library/bash"),
-				Command: pulumi.StringArray{
-					pulumi.String("/usr/local/bin/bash"),
-					pulumi.String("-c"),
-					pulumi.String("echo hello; sleep 100000"),
-				},
+		SubnetName:         pulumi.String(subnetName),
+		VirtualNetworkName: vnet.Name,
+	})
+
+	nic, err := networkc.NewNetworkInterface(ctx, fmt.Sprintf("%s-nic", vmName), &networkc.NetworkInterfaceArgs{
+		ResourceGroupName: rg.Name,
+		IpConfigurations: networkc.NetworkInterfaceIpConfigurationArray{
+			&networkc.NetworkInterfaceIpConfigurationArgs{
+				Name:                       pulumi.String("internal"),
+				SubnetId:                   subnet.Id(),
+				PrivateIpAddressAllocation: pulumi.String("Dynamic"),
 			},
-		},
-		NetworkProfile: containerinstance.ContainerGroupNetworkProfileArgs{
-			Id: pulumi.String("/subscriptions/174c6cc1-faef-4e40-91f4-1bef3a703153/resourceGroups/rg-play-hub-cfe74535/providers/Microsoft.Network/virtualNetworks/hub60b0830a/subnets/snet-hub/aci"),
 		},
 	})
 	utils.ExitOnError(err)
 
+	_, err = computec.NewLinuxVirtualMachine(ctx, vmName, &computec.LinuxVirtualMachineArgs{
+		ResourceGroupName: rg.Name,
+		Size:              pulumi.String("Standard_B2s"),
+		AdminUsername:     pulumi.String("adminuser"),
+		NetworkInterfaceIds: pulumi.StringArray{
+			nic.ID(),
+		},
+		AdminSshKeys: computec.LinuxVirtualMachineAdminSshKeyArray{
+			&computec.LinuxVirtualMachineAdminSshKeyArgs{
+				Username:  pulumi.String("adminuser"),
+				PublicKey: readFileOrPanic("C:/Users/write_eojd6fl/.ssh/id_rsa.pub"),
+			},
+		},
+		OsDisk: &computec.LinuxVirtualMachineOsDiskArgs{
+			Caching:            pulumi.String("ReadWrite"),
+			StorageAccountType: pulumi.String("Standard_LRS"),
+		},
+		SourceImageReference: &computec.LinuxVirtualMachineSourceImageReferenceArgs{
+			Publisher: pulumi.String("Canonical"),
+			Offer:     pulumi.String("UbuntuServer"),
+			Sku:       pulumi.String("16.04-LTS"),
+			Version:   pulumi.String("latest"),
+		},
+	})
+	utils.ExitOnError(err)
+
+}
+
+func readFileOrPanic(path string) pulumi.StringInput {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		panic(err.Error())
+	}
+	return pulumi.String(string(data))
 }

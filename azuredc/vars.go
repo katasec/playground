@@ -93,14 +93,19 @@ var (
 			AddressPrefix: "172.16.0.64/26",
 		},
 		{
-			Name:          "GatewaySubnet",
+			Name:          "AzureFirewallManagementSubnet",
 			Description:   "Subnet for VPN Gateway",
 			AddressPrefix: "172.16.0.128/26",
 		},
 		{
-			Name:          "AzureFirewallManagementSubnet",
+			Name:          "GatewaySubnet",
 			Description:   "Subnet for VPN Gateway",
-			AddressPrefix: "172.16.0.192/26",
+			AddressPrefix: "172.16.0.192/27",
+		},
+		{
+			Name:          "snet-test",
+			Description:   "Subnet for VPN Gateway",
+			AddressPrefix: "172.16.0.224/27",
 		},
 	}
 
