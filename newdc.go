@@ -31,11 +31,14 @@ func NewDC(ctx *pulumi.Context) error {
 	rg2, vnet2 := AddSpoke(ctx, "prod", hubrg, hubVnet, firewall, 1)
 	// AddSpoke(ctx, "nprod2", hubrg, hubVnet, firewall, 2)
 
+	//launchBastion(ctx, hubrg, hubVnet)
+
 	// Launch some vms
 	if runvms {
 		launchVM(ctx, hubVnet, hubrg, "snet-test", "vm01")
 		launchVM(ctx, vnet1, rg1, "snet-tier2-vm", "vm02")
 		launchVM(ctx, vnet2, rg2, "snet-tier2-vm", "vm03")
+		launchBastion(ctx, hubrg, hubVnet)
 	}
 	return err
 }
@@ -154,4 +157,37 @@ func readFileOrPanic(path string) pulumi.StringInput {
 		panic(err.Error())
 	}
 	return pulumi.String(string(data))
+}
+
+func launchBastion(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) *computec.BastionHost {
+
+	subnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
+		ResourceGroupName:  rg.Name,
+		SubnetName:         pulumi.String("AzureBastionSubnet"),
+		VirtualNetworkName: vnet.Name,
+	})
+
+	subnetId := subnet.Id().ApplyT(func(subnetId *string) string { return *subnetId }).(pulumi.StringOutput)
+
+	// Create an Management IP for the Basic firewall for Azure Service Traffic
+	bastionIp, _ := network.NewPublicIPAddress(ctx, "basition-ip", &network.PublicIPAddressArgs{
+		ResourceGroupName:        rg.Name,
+		PublicIPAllocationMethod: pulumi.String("Static"),
+		Sku: &network.PublicIPAddressSkuArgs{
+			Name: pulumi.String("Standard"),
+			Tier: pulumi.String("Regional"),
+		},
+	})
+
+	bastion, err := computec.NewBastionHost(ctx, "bastion", &computec.BastionHostArgs{
+		ResourceGroupName: rg.Name,
+		IpConfiguration: computec.BastionHostIpConfigurationArgs{
+			Name:              pulumi.String("ipconfig"),
+			SubnetId:          subnetId,
+			PublicIpAddressId: bastionIp.ID(),
+		},
+	})
+	utils.ExitOnError(err)
+
+	return bastion
 }
