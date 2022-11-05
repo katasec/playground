@@ -8,26 +8,41 @@ var (
 			Name:          "snet-tier1-agw",
 			Description:   "Subnet for AGW",
 			AddressPrefix: "172.x.1.0/24",
+			Tags: map[string]string{
+				"snet:role": "tier1-agw",
+			},
 		},
 		{
 			Name:          "snet-tier1-webin",
 			Description:   "Subnet for other LBs",
 			AddressPrefix: "172.x.2.0/24",
+			Tags: map[string]string{
+				"snet:role": "tier1-webin",
+			},
 		},
 		{
 			Name:          "snet-tier1-rsvd1",
 			Description:   "Tier 1 reserved subnet",
 			AddressPrefix: "172.x.3.0/25",
+			Tags: map[string]string{
+				"snet:role": "tier1-rsvd1",
+			},
 		},
 		{
 			Name:          "snet-tier1-rsvd2",
 			Description:   "Tier 1 reserved subnet",
 			AddressPrefix: "172.x.3.128/25",
+			Tags: map[string]string{
+				"snet:role": "tier1-rsvd2",
+			},
 		},
 		{
 			Name:          "snet-tier2-wbapp",
 			Description:   "Subnet for web apps",
 			AddressPrefix: "172.x.4.0/23",
+			Tags: map[string]string{
+				"snet:role": "tier2-wbapp",
+			},
 		},
 		{
 			Name:          "snet-tier2-rsvd2",
@@ -43,6 +58,9 @@ var (
 			Name:          "snet-tier2-vm",
 			Description:   "Subnet for VMs",
 			AddressPrefix: "172.x.8.0/21",
+			Tags: map[string]string{
+				"snet:role": "tier2-vm",
+			},
 		},
 		{
 			Name:          "snet-tier2-aks",

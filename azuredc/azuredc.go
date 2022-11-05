@@ -20,6 +20,7 @@ type SubnetInfo struct {
 	Name          string
 	AddressPrefix string
 	Description   string
+	Tags          map[string]string
 }
 
 func (v *VNETInfo) GenerateSpoke(offset int) {
