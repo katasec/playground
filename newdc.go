@@ -40,7 +40,6 @@ func NewDC(ctx *pulumi.Context) error {
 		launchVM(ctx, hubVnet, hubrg, "snet-test", "vm01")
 		launchVM(ctx, vnet1, rg1, "snet-tier2-vm", "vm02")
 		launchVM(ctx, vnet2, rg2, "snet-tier2-vm", "vm03")
-		launchBastion(ctx, hubrg, hubVnet)
 	}
 
 	launchK8s(ctx, rg1, vnet1)
