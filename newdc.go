@@ -16,6 +16,7 @@ import (
 var (
 	launchVmFlag      = false
 	launchBastionFlag = false
+	launchK8sFlag     = false
 )
 
 // NewDC creates a new data centre based on a reference azuredc
@@ -37,12 +38,15 @@ func NewDC(ctx *pulumi.Context) error {
 
 	// Launch some vms
 	if launchVmFlag {
-		launchVM(ctx, hubVnet, hubrg, "snet-test", "vm01")
-		launchVM(ctx, vnet1, rg1, "snet-tier2-vm", "vm02")
-		launchVM(ctx, vnet2, rg2, "snet-tier2-vm", "vm03")
+		//launchVM(ctx, hubVnet, hubrg, "snet-test", "vm03")
+		launchVM(ctx, vnet1, rg1, "snet-tier2-vm", "vm01")
+		launchVM(ctx, vnet2, rg2, "snet-tier2-vm", "vm02")
 	}
 
-	launchK8s(ctx, rg1, vnet1)
+	if launchK8sFlag {
+		launchK8s(ctx, rg1, vnet1)
+	}
+
 	return err
 }
 
