@@ -6,12 +6,19 @@ import (
 
 	"github.com/katasec/playground/utils"
 	"github.com/pulumi/pulumi-azure-native/sdk/go/azure/containerservice"
+	network "github.com/pulumi/pulumi-azure-native/sdk/go/azure/network"
 	"github.com/pulumi/pulumi-azure-native/sdk/go/azure/resources"
 	"github.com/pulumi/pulumi-azuread/sdk/v5/go/azuread"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func launchK8s(ctx *pulumi.Context) {
+func launchK8s(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) {
+
+	k8sSubnet := network.LookupSubnetOutput(ctx, network.LookupSubnetOutputArgs{
+		ResourceGroupName:  rg.Name,
+		SubnetName:         pulumi.String("snet-tier2-aks"),
+		VirtualNetworkName: vnet.Name,
+	})
 
 	myrg, err := resources.NewResourceGroup(ctx, "rg-ea-aks01", &resources.ResourceGroupArgs{})
 	utils.ExitOnError(err)
@@ -42,12 +49,14 @@ func launchK8s(ctx *pulumi.Context) {
 				OsType:             pulumi.String("Linux"),
 				Type:               pulumi.String("VirtualMachineScaleSets"),
 				VmSize:             pulumi.String("Standard_B4ms"),
+				VnetSubnetID:       k8sSubnet.Id(),
 			},
 		},
 		DnsPrefix: pulumi.String("ark"),
 		NetworkProfile: &containerservice.ContainerServiceNetworkProfileArgs{
-			NetworkPlugin: pulumi.String("azure"),
-			NetworkPolicy: pulumi.String("calico"),
+			NetworkPlugin:    pulumi.String("azure"),
+			NetworkPolicy:    pulumi.String("calico"),
+			DockerBridgeCidr: pulumi.String("10.17.0.1/16"),
 		},
 		ApiServerAccessProfile: &containerservice.ManagedClusterAPIServerAccessProfileArgs{
 			EnablePrivateCluster: pulumi.BoolPtr(true),
