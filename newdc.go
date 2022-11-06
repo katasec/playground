@@ -40,6 +40,8 @@ func NewDC(ctx *pulumi.Context) error {
 		launchVM(ctx, vnet2, rg2, "snet-tier2-vm", "vm03")
 		launchBastion(ctx, hubrg, hubVnet)
 	}
+
+	//launchK8s(ctx)
 	return err
 }
 
