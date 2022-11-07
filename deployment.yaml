@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tailscale-deployment
+  labels:
+    app: tailscale
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tailscale
+  template:
+    metadata:
+      labels:
+        app: tailscale
+    spec:
+      containers:
+      - name: tailscale
+        command: ["/bin/sh", "-exc", "--"]
+        args: ["tailscale.sh"]      
+        image: ghcr.io/katasec/tailscale:0.04
+        env:
+          - name: "KEY"
+            value: "$(KEY)"
+          - name: "ADVERTISE_ROUTES"
+            value: "$(ROUTES)"
+        ports:
+        - containerPort: 8080
