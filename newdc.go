@@ -30,6 +30,7 @@ func NewDC(ctx *pulumi.Context) error {
 	// Create some spokes
 	rg1, vnet1 := AddSpoke(ctx, "nprod", hubrg, hubVnet, firewall, 0)
 	// rg2, vnet2 := AddSpoke(ctx, "prod", hubrg, hubVnet, firewall, 1)
+	AddSpoke(ctx, "prod", hubrg, hubVnet, firewall, 1)
 	// AddSpoke(ctx, "nprod2", hubrg, hubVnet, firewall, 2)
 
 	if launchBastionFlag {
