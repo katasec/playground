@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 
 	"github.com/katasec/playground/azuredc"
 	"github.com/katasec/playground/utils"
@@ -140,8 +141,10 @@ func launchVM(ctx *pulumi.Context, vnet *network.VirtualNetwork, rg *resources.R
 		},
 		AdminSshKeys: computec.LinuxVirtualMachineAdminSshKeyArray{
 			&computec.LinuxVirtualMachineAdminSshKeyArgs{
-				Username:  pulumi.String("adminuser"),
-				PublicKey: readFileOrPanic("C:/Users/write_eojd6fl/.ssh/id_rsa.pub"),
+				Username: pulumi.String("adminuser"),
+				//Export an env vairable here in your local system which contains your public key path
+				PublicKey: readFileOrPanic(os.Getenv("SSH_ADMIN_KEY")),
+				//PublicKey: os.Getenv("sshkey"),
 			},
 		},
 		OsDisk: &computec.LinuxVirtualMachineOsDiskArgs{
