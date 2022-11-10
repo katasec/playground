@@ -21,8 +21,8 @@ spec:
         image: ghcr.io/katasec/tailscale:0.04
         env:
           - name: "KEY"
-            value: "$(KEY)"
+            value: "$(TAILSCALE_KEY)"
           - name: "ADVERTISE_ROUTES"
-            value: "$(ROUTES)"
+            value: "$(TAILSCALE_ROUTES)"
         ports:
         - containerPort: 8080

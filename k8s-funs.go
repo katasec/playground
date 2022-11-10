@@ -21,6 +21,7 @@ func launchK8s(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.V
 	})
 
 	myrg, err := resources.NewResourceGroup(ctx, "rg-ea-aks01", &resources.ResourceGroupArgs{})
+	ctx.Export("aks_rg", myrg.Name)
 	utils.ExitOnError(err)
 
 	sp, spPwd, err := CreateAzureServicePrincipal(ctx, "k8s")
@@ -63,7 +64,7 @@ func launchK8s(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.V
 		},
 	})
 	utils.ExitOnError(err)
-	ctx.Export("aks", managedCluster)
+	ctx.Export("aks_name", managedCluster.Name)
 }
 
 func CreateAzureServicePrincipal(ctx *pulumi.Context, name string) (*azuread.ServicePrincipal, *azuread.ServicePrincipalPassword, error) {
