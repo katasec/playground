@@ -40,8 +40,8 @@ func NewDC(ctx *pulumi.Context) error {
 
 	// Launch some vms
 	if launchVmFlag {
-		launchVM(ctx, vnet1, rg1, "snet-tier2-vm", "vm01") // <- nprod vm
-		//launchVM(ctx, hubVnet, hubrg, "snet-test", "vm03") // <- hub vm
+		//launchVM(ctx, vnet1, rg1, "snet-tier2-vm", "vm01") // <- nprod vm
+		launchVM(ctx, hubVnet, hubrg, "snet-test", "vm03") // <- hub vm
 		//launchVM(ctx, vnet2, rg2, "snet-tier2-vm", "vm02") // <- prod vm
 	}
 
