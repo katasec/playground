@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	launchVmFlag      = false
-	launchBastionFlag = false
+	launchVmFlag      = true
+	launchBastionFlag = true
 	launchK8sFlag     = true
 )
 
