@@ -1,8 +1,8 @@
 package main
 
-import (
-	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-)
+import "fmt"
+
+//"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 var (
 	Location string
@@ -10,5 +10,14 @@ var (
 
 func main() {
 
-	pulumi.Run(NewDC)
+	resourceGroup := "myrg"
+	clusterName := "mycluster"
+	namespace := "default"
+	yaml := "deployment.yaml"
+	mycommand := fmt.Sprintf("az aks command invoke --resource-group %s --name %s--command \"kubectl apply -f %s -n %s\" --file deployment.yaml", resourceGroup, clusterName, yaml, namespace)
+
+	fmt.Println(mycommand)
+
+	//pulumi.Run(NewDC)
+
 }
