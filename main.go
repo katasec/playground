@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/katasec/playground/utils"
-	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
 //"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -34,10 +33,20 @@ func main() {
 
 	// createTempK8sYaml()
 
-	pulumi.Run(NewDC)
+	//pulumi.Run(NewDC)
 
+	egalFunc()
 }
 
+func egalFunc() {
+	mymap := make(map[string]string)
+
+	mymap["name"] = "egal"
+	mymap["sex"] = "male"
+	mymap["key"] = "value"
+
+	fmt.Println(mymap["name"])
+}
 func createTempK8sYaml() string {
 	file, err := ioutil.TempFile("", "")
 	utils.ExitOnError(err)
