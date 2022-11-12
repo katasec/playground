@@ -27,12 +27,11 @@ func main() {
 	// clusterName := "mycluster"
 	// namespace := "default"
 
+	// config := readConfig()
 	// yamlFile := createTempK8sYaml()
 	// mycommand := fmt.Sprintf("az aks command invoke --resource-group %s --name %s --command \"kubectl apply -f %s -n %s\" --file deployment.yaml", resourceGroup, clusterName, yamlFile, namespace)
 
 	// fmt.Println(mycommand)
-
-	// createTempK8sYaml()
 
 	pulumi.Run(NewDC)
 
