@@ -31,6 +31,9 @@ func createFWRoute(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName s
 }
 func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) *network.AzureFirewall {
 
+	// Create Firewall Policy for later assignment
+	createFirewallPolicy(ctx, rg)
+
 	// Create an Management IP for the Basic firewall for Azure Service Traffic
 	managementIp, _ := network.NewPublicIPAddress(ctx, "fw-mgmt-ip", &network.PublicIPAddressArgs{
 		ResourceGroupName:        rg.Name,
@@ -96,4 +99,23 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 	utils.ExitOnError(err)
 
 	return firewall
+}
+
+func createFirewallPolicy(ctx *pulumi.Context, rg *resources.ResourceGroup) *network.FirewallPolicy {
+
+	// Arguments to create a fwpolicy
+	args := &network.FirewallPolicyArgs{
+		ResourceGroupName: rg.Name,
+		Sku: network.FirewallPolicySkuArgs{
+			Tier: pulumi.String("Basic"),
+		},
+	}
+
+	// Create fw policy
+	firewallPolicy, err := network.NewFirewallPolicy(ctx, "Allow_ghcr.io", args)
+	if err != nil {
+		panic(err)
+	}
+
+	return firewallPolicy
 }
