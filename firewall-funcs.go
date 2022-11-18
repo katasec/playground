@@ -4,6 +4,7 @@ import (
 	"github.com/katasec/playground/utils"
 	network "github.com/pulumi/pulumi-azure-native/sdk/go/azure/network"
 	"github.com/pulumi/pulumi-azure-native/sdk/go/azure/resources"
+	networkc "github.com/pulumi/pulumi-azure/sdk/v5/go/azure/network"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -32,7 +33,7 @@ func createFWRoute(ctx *pulumi.Context, rg *resources.ResourceGroup, tableName s
 func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *network.VirtualNetwork) *network.AzureFirewall {
 
 	// Create Firewall Policy for later assignment
-	createFirewallPolicy(ctx, rg)
+	fwPolicy := createFirewallPolicy(ctx, rg)
 
 	// Create an Management IP for the Basic firewall for Azure Service Traffic
 	managementIp, _ := network.NewPublicIPAddress(ctx, "fw-mgmt-ip", &network.PublicIPAddressArgs{
@@ -95,6 +96,9 @@ func createFirewall(ctx *pulumi.Context, rg *resources.ResourceGroup, vnet *netw
 				Id: mgmtfwSubnet.Id(),
 			},
 		},
+		FirewallPolicy: network.SubResourceArgs{
+			Id: fwPolicy.ID(),
+		},
 	}, pulumi.DependsOn([]pulumi.Resource{vnet}))
 	utils.ExitOnError(err)
 
@@ -112,10 +116,40 @@ func createFirewallPolicy(ctx *pulumi.Context, rg *resources.ResourceGroup) *net
 	}
 
 	// Create fw policy
-	firewallPolicy, err := network.NewFirewallPolicy(ctx, "Allow_ghcr.io", args)
+	firewallPolicy, err := network.NewFirewallPolicy(ctx, "hub-policy-", args)
 	if err != nil {
 		panic(err)
 	}
+
+	_, err = networkc.NewFirewallPolicyRuleCollectionGroup(ctx, "apprules-", &networkc.FirewallPolicyRuleCollectionGroupArgs{
+		Priority:         pulumi.Int(101),
+		FirewallPolicyId: firewallPolicy.ID(),
+		ApplicationRuleCollections: networkc.FirewallPolicyRuleCollectionGroupApplicationRuleCollectionArray{
+			networkc.FirewallPolicyRuleCollectionGroupApplicationRuleCollectionArgs{
+				Name:     pulumi.String("Allowed_HTTPS"),
+				Action:   pulumi.String("Allow"),
+				Priority: pulumi.Int(100),
+				Rules: networkc.FirewallPolicyRuleCollectionGroupApplicationRuleCollectionRuleArray{
+					networkc.FirewallPolicyRuleCollectionGroupApplicationRuleCollectionRuleArgs{
+						Name: pulumi.String("allow_ghcr.io"),
+						SourceAddresses: pulumi.StringArray{
+							pulumi.String("*"),
+						},
+						DestinationFqdns: pulumi.StringArray{
+							pulumi.String("ghcr.io"),
+						},
+						Protocols: networkc.FirewallPolicyRuleCollectionGroupApplicationRuleCollectionRuleProtocolArray{
+							&networkc.FirewallPolicyRuleCollectionGroupApplicationRuleCollectionRuleProtocolArgs{
+								Port: pulumi.Int(443),
+								Type: pulumi.String("Https"),
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	utils.ExitOnError(err)
 
 	return firewallPolicy
 }
